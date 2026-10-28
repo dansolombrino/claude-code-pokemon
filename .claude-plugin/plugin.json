@@ -1,0 +1,11 @@
+{
+  "name": "pokemon-footer",
+  "version": "0.1.0",
+  "description": "Pokémon that live in your Claude Code footer: they walk, make friends, and react to what Claude is doing. A port of vscode-pokemon.",
+  "author": { "name": "Daniele Solombrino" },
+  "homepage": "https://github.com/dansolombrino/claude-code-pokemon",
+  "repository": "https://github.com/dansolombrino/claude-code-pokemon",
+  "license": "MIT",
+  "keywords": ["pokemon", "pets", "footer", "statusline", "fun"],
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "claude-code-pokemon",
+  "description": "Pokémon that live in your Claude Code footer.",
+  "owner": { "name": "Daniele Solombrino" },
+  "plugins": [{ "name": "pokemon-footer", "source": "./" }]
+}
