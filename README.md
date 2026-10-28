@@ -2,6 +2,8 @@
 
 > A Claude Code port of **[vscode-pokemon](https://github.com/jakobhoeg/vscode-pokemon)** by [jakobhoeg](https://github.com/jakobhoeg) ([VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=jakobhoeg.vscode-pokemon)). All the behaviour, Pokédex data, translations and sprites come from that project. Go give it a star.
 
+![Spawning a Blastoise next to Metagross, Salamence and Kyogre in the Claude Code footer](docs/demo.gif)
+
 Pokémon that live in the bottom bar of [Claude Code](https://claude.com/claude-code), next to your status line. They wander, make friends and get happy when you pet them. They also notice what Claude is doing: they hurry while it works, stop and look up when it needs your approval, and celebrate when it finishes.
 
 It is a port of [vscode-pokemon](https://github.com/jakobhoeg/vscode-pokemon) by [jakobhoeg](https://github.com/jakobhoeg), as a Claude Code mod (a `pokemon-footer` plugin with a hooks module). All 630 Pokémon with sprites in vscode-pokemon are here, from generation 1 to 5, shinies included.
