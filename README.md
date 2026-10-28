@@ -52,6 +52,25 @@ Up to 12 Pokémon at once. The team and settings persist across sessions.
 - **Real pixels** in terminals with an image protocol: kitty, Ghostty and iTerm2 3.5+ (iTerm2 under fullscreen rendering). Inside tmux, turn on `allow-passthrough` and `focus-events`.
 - **Coloured half-block cells** everywhere else, two pixels per cell. The plugin switches to these by itself when the terminal cannot show images; `/pokemon render raster` forces them.
 
+### Blurry Pokémon in a terminal that can draw images?
+
+Claude Code only turns on images for the terminals it knows: kitty, Ghostty and iTerm2. Other terminals that speak the kitty graphics protocol get the half-block cells unless you tell Claude Code to use images anyway:
+
+```sh
+CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1 claude
+```
+
+Then run `/pokemon render auto` once to clear the fallback the plugin remembered.
+
+To make it stick, export it in your shell profile, guarded by the terminal it is for. For example, [Orca](https://github.com/stablyai/orca) sets the variable when it launches Claude Code itself, but not when you type `claude` in an Orca terminal tab:
+
+```sh
+# ~/.zshrc
+[[ $TERM_PROGRAM == Orca ]] && export CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1
+```
+
+Keep the guard. A terminal that cannot draw images, such as macOS Terminal.app, an ssh session or tmux without passthrough, may show nothing, or stray characters, where the Pokémon should be when the variable is forced on.
+
 Hovering a Pokémon pets it in terminals that report the pointer.
 
 ## Behaviour
