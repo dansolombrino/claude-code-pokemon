@@ -38,7 +38,7 @@ Mods are an early-access part of Claude Code; this one needs a version that runs
 | `/pokemon pet Blaze` | Pets one (or hover the pointer over it) |
 | `/pokemon find saur` | Searches the Pokédex |
 | `/pokemon size nano\|small\|medium\|large` | Pokémon size |
-| `/pokemon rows 7`, `/pokemon width 48` | Most height and width the strip takes, in terminal cells. Beside a status line it also shrinks to the room the status line leaves, so the footer never grows; with too little room it hides |
+| `/pokemon rows 7`, `/pokemon width 48` | Most height and width the strip takes, in terminal cells. Beside a status line it also shrinks to the room the status line leaves, so the footer never grows; with too little room, or while the background-agents list shows under it, it hides |
 | `/pokemon place footer\|band` | Beside the status line, or full width above the prompt |
 | `/pokemon render auto\|image\|raster` | Real pixels or coloured text cells |
 | `/pokemon language en\|fr\|de\|ja` | Pokémon names in another language |

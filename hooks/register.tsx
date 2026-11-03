@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderElement, RenderInput, Timer } from 'claude-code'
+import type { AgentStatus, EngineInterface, Register, RenderElement, RenderInput, Timer } from 'claude-code'
 
 import type { Language, Placement, PokemonSize, RenderMode, PokemonSettings, TeamMember } from '../types'
 import { blank, draw, rasterCells, resample, ALERT, HAPPY, HEART, POKEBALL } from './pixels'
@@ -37,6 +37,8 @@ const MIN_FOOTER_COLUMNS = 8
 const MIN_FOOTER_ROWS = 2
 // How often the status line is measured again (it may change as it ticks).
 const STATUS_LINE_MS = 5000
+// How often the session's agents are listed again, to spot the footer's tasks list.
+const AGENTS_MS = 1000
 
 const DEFAULT_SETTINGS: PokemonSettings = {
   size: 'medium',
@@ -74,6 +76,24 @@ let statusFit: StatusLineFit | null | undefined
 let statusCwd = '.'
 let statusColumns = 80
 let isMeasuring = false
+// Whether the session has live agents, so the footer shows its tasks list under
+// the status line: its rows reach the right edge, where the overlay strip would draw.
+let hasAgents = false
+// The footer drops an agent from its list as it ends; `$.agent.list()` keeps it
+// for a while longer, so ended agents do not count.
+const ENDED: ReadonlySet<AgentStatus> = new Set(['completed', 'failed', 'killed'])
+
+async function relistAgents($: EngineInterface): Promise<void> {
+  try {
+    const isListed = (await $.agent.list()).some(agent => !ENDED.has(agent.status))
+    if (isListed !== hasAgents) {
+      hasAgents = isListed
+      $.ui.invalidate('ui.render')
+    }
+  } catch (error) {
+    $.ui.log(`${PLUGIN}: agents: ${String(error)}`, { to: 'debug' })
+  }
+}
 
 async function remeasureStatusLine($: EngineInterface): Promise<void> {
   if (isMeasuring) {
@@ -464,6 +484,8 @@ export const register: Register = on => {
     statusCwd = e.cwd
     void remeasureStatusLine($)
     $.clock.every(STATUS_LINE_MS, () => void remeasureStatusLine($))
+    void relistAgents($)
+    $.clock.every(AGENTS_MS, () => void relistAgents($))
 
     return next(e)
   })
@@ -479,6 +501,12 @@ export const register: Register = on => {
     } catch (error) {
       return { text: `pokemon: ${String(error)}` }
     }
+  })
+
+  on('agent.spawn', async ($, e, next) => {
+    const result = await next(e)
+    void relistAgents($)
+    return result
   })
 
   on('turn.start', async ($, e, next) => {
@@ -504,7 +532,9 @@ export const register: Register = on => {
   })
 
   on('turn.complete', async ($, e, next) => {
-    if (!e.agentId) {
+    if (e.agentId) {
+      void relistAgents($)
+    } else {
       world.mood = 'idle'
       if (!e.isAborted) {
         celebrate(world)
@@ -540,13 +570,16 @@ export const register: Register = on => {
       // No status line: the strip sits beside the mode labels and sets the footer's height.
       return strip($, e, engine, settings.width, settings.rows, 'inline')
     }
-    if (statusFit === undefined) {
+    // The tasks list under the status line fills the cells the overlay would take.
+    if (statusFit === undefined || hasAgents) {
+      geometry = undefined
       return engine
     }
     // Only the room the status line leaves, and no taller than it, so the footer never grows.
     const columns = Math.min(settings.width, viewport - 2 * FOOTER_PADDING - statusFit.columns - FOOTER_GAP)
     const rows = Math.min(settings.rows, statusFit.lines)
     if (columns < MIN_FOOTER_COLUMNS || rows < MIN_FOOTER_ROWS) {
+      geometry = undefined
       return engine
     }
     return strip($, e, engine, columns, rows, 'overlay')
