@@ -1,6 +1,6 @@
 {
   "name": "pokemon-footer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pokémon that live in your Claude Code footer: they walk, make friends, and react to what Claude is doing. A port of vscode-pokemon.",
   "author": { "name": "Daniele Solombrino" },
   "homepage": "https://github.com/dansolombrino/claude-code-pokemon",
