@@ -14,6 +14,8 @@ import {
   POKEDEX,
 } from './pokedex-lookup'
 import { frameAt, loadSpriteSet } from './sprites'
+import { measureStatusLine } from './statusline'
+import type { StatusLineFit } from './statusline'
 import type { SpriteSet } from './sprites'
 import { celebrate, monAt, newMon, step, swipe, TICK_MS } from './world'
 import type { BubbleKind, Mon, World } from './world'
@@ -26,6 +28,15 @@ const SIZE_FRACTION: Record<PokemonSize, number> = { nano: 0.55, small: 0.7, med
 // World pixels per cell column: one for half-block cells, more for real images.
 const IMAGE_SCALE = 3
 const MAX_TEAM = 12
+// The footer row's padding at each side, and the gap the engine keeps between
+// the status line and what sits at its right.
+const FOOTER_PADDING = 2
+const FOOTER_GAP = 2
+// Narrower or shorter than this beside the status line, the footer strip hides.
+const MIN_FOOTER_COLUMNS = 8
+const MIN_FOOTER_ROWS = 2
+// How often the status line is measured again (it may change as it ticks).
+const STATUS_LINE_MS = 5000
 
 const DEFAULT_SETTINGS: PokemonSettings = {
   size: 'medium',
@@ -58,6 +69,32 @@ const world: World = { width: 48, spriteHeight: 12, mood: 'idle', mons: [] }
 const spriteSets = new Map<string, SpriteSet>()
 let geometry: Geometry | undefined
 let ticker: Timer | undefined
+// What the status line takes: null when none is configured, undefined until measured.
+let statusFit: StatusLineFit | null | undefined
+let statusCwd = '.'
+let statusColumns = 80
+let isMeasuring = false
+
+async function remeasureStatusLine($: EngineInterface): Promise<void> {
+  if (isMeasuring) {
+    return
+  }
+  isMeasuring = true
+  try {
+    const fit = await measureStatusLine($, statusCwd, statusColumns)
+    if (fit === undefined) {
+      return
+    }
+    if (fit?.columns !== statusFit?.columns || fit?.lines !== statusFit?.lines || (fit === null) !== (statusFit === null)) {
+      statusFit = fit
+      $.ui.invalidate('ui.render')
+    }
+  } catch (error) {
+    $.ui.log(`${PLUGIN}: status line: ${String(error)}`, { to: 'debug' })
+  } finally {
+    isMeasuring = false
+  }
+}
 
 function spriteKey(mon: Pick<Mon, 'key' | 'shiny'>, height: number): string {
   return `${mon.key}/${mon.shiny}/${height}`
@@ -424,7 +461,15 @@ export const register: Register = on => {
     }
     await syncWorld($)
     startTicker($)
+    statusCwd = e.cwd
+    void remeasureStatusLine($)
+    $.clock.every(STATUS_LINE_MS, () => void remeasureStatusLine($))
 
+    return next(e)
+  })
+
+  on('session.measure', async ($, e, next) => {
+    void remeasureStatusLine($)
     return next(e)
   })
 
@@ -486,7 +531,25 @@ export const register: Register = on => {
     if (settings.place !== 'footer') {
       return engine
     }
-    return strip($, e, engine, settings.width)
+    const viewport = e.viewport?.columns ?? 80
+    if (viewport !== statusColumns) {
+      statusColumns = viewport
+      void remeasureStatusLine($)
+    }
+    if (statusFit === null) {
+      // No status line: the strip sits beside the mode labels and sets the footer's height.
+      return strip($, e, engine, settings.width, settings.rows, 'inline')
+    }
+    if (statusFit === undefined) {
+      return engine
+    }
+    // Only the room the status line leaves, and no taller than it, so the footer never grows.
+    const columns = Math.min(settings.width, viewport - 2 * FOOTER_PADDING - statusFit.columns - FOOTER_GAP)
+    const rows = Math.min(settings.rows, statusFit.lines)
+    if (columns < MIN_FOOTER_COLUMNS || rows < MIN_FOOTER_ROWS) {
+      return engine
+    }
+    return strip($, e, engine, columns, rows, 'overlay')
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -495,16 +558,21 @@ export const register: Register = on => {
     if (settings.place !== 'band') {
       return engine
     }
-    return strip($, e, engine, Math.max(12, (e.viewport?.columns ?? 80) - 2))
+    return strip($, e, engine, Math.max(12, (e.viewport?.columns ?? 80) - 2), settings.rows, 'inline')
   })
 }
 
 // The Pokémon strip beside (footer) or below (band) what the engine draws there.
+// `overlay` takes no room in the footer's layout, so the engine never wraps the
+// footer onto new rows for it: it is drawn from the footer's top right corner,
+// over the cells the status line leaves blank.
 async function strip(
   $: EngineInterface,
   e: RenderInput<'SessionMode' | 'AbovePrompt'>,
   engine: RenderElement,
   columns: number,
+  rows: number,
+  layout: 'inline' | 'overlay',
 ): Promise<RenderElement> {
   const elements = $.ui.resolve(e)
   if (!('Raster' in elements)) {
@@ -523,7 +591,7 @@ async function strip(
   const next: Geometry = {
     site: e.requestId,
     columns,
-    rows: settings.rows,
+    rows,
     scale: isImage ? IMAGE_SCALE : 1,
     isImage,
   }
@@ -543,31 +611,44 @@ async function strip(
       key={STRIP}
       source={{ rgba: frame.rgba.toBase64(), width: frame.width, height: frame.height }}
       columns={columns}
-      rows={settings.rows}
+      rows={rows}
       alt=" "
     />
   ) : (
-    <Raster key={STRIP} cells={rasterCells(frame)} columns={columns} rows={settings.rows} />
+    <Raster key={STRIP} cells={rasterCells(frame)} columns={columns} rows={rows} />
   )
   const body = (
-    <Box width={columns} height={settings.rows}>
+    <Box width={columns} height={rows}>
       {sprite}
       {settings.hover && (
         <Box position="absolute" top={0} left={0}>
-          <Client key={HOVER} module="./hover.tsx" width={columns} height={settings.rows} />
+          <Client key={HOVER} module="./hover.tsx" width={columns} height={rows} />
         </Box>
       )}
     </Box>
   )
-  return e.component === 'SessionMode' ? (
+  if (e.component === 'AbovePrompt') {
+    return (
+      <Box flexDirection="column">
+        {engine}
+        {body}
+      </Box>
+    )
+  }
+  return layout === 'overlay' ? (
+    <Box flexDirection="row">
+      {engine}
+      <Box width={1} height={1}>
+        <Box position="absolute" top={0} right={0}>
+          {body}
+        </Box>
+      </Box>
+    </Box>
+  ) : (
     <Box flexDirection="row" alignItems="flex-end">
       {engine}
       <Box marginLeft={1}>{body}</Box>
     </Box>
-  ) : (
-    <Box flexDirection="column">
-      {engine}
-      {body}
-    </Box>
   )
 }
+
